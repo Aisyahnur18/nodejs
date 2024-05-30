@@ -1,145 +1,107 @@
 const express = require('express');
-const bodyParser = require('body-parser');
-const koneksi = require('./config/database');
 const multer = require('multer');
 const path = require('path');
+const koneksi = require('./config/database');
 
 const app = express();
-const port = 3000;
+const port = 5000;
 
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
+app.use(express.static('./public'));
+
+// Multer setup
+var storage = multer.diskStorage({
+    destination: (req, file, callBack) => {
+        callBack(null, './public/images/');
+    },
+    filename: (req, file, callBack) => {
+        callBack(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname));
+    }
+});
+
+const upload = multer({ storage: storage });
+
+// Routes
 app.get('/Hello World', (req, res) => {
     res.send('Hello World!');
 });
+
 app.get('/jayakarta', (req, res) => {
     res.send('Hello jayakarta!');
 });
 
-app.use(express.static("./public"))
-// use of multer
-var storage = multer.diskStorage({
-    destination: (req, file, callBack) => {
-        callBack(null, './public/images/')
-    },
-    filename: (req, file, callBack) =>{
-        callBack(null, file.fieldname + '-' + Date.now() + path.extname(file.originalname))
-    }
-})
-
-const upload = multer({
-storage:storage})
-
-// create data / insert data
-app.post('/api/movies',(req, res) => {
-    
-const upload = multer({storage:storage}).single('images');
-    upload(req,res,function (err){
-if(err instanceof multer.MulterError){
-    //error multer
-    return res.status(500).json({ message: 'Ada kesalahan multer!', error: err });
-    
-}else if(err) {
-    //error umum
-    return res.status(500).json({ message: 'Ada kesalahan umum!', error: err });
-    
-}else{
-    console.log(req.file)
-    if (!req.file) {
-        console.log("No file upload");
-        const data = { ...req.body};
-        const judul = req.judul;
-        const rating = req.rating;
-        const deskripsi = req.deskripsi;
-        const sutradara = req.sutradara;
-        const querysql = 'INSERT INTO movies (judul, rating, deskripsi, sutradara) VALUES (?, ?, ?, ?);';
-
-        // jalankan query
-        koneksi.query(querysql, [judul, rating, deskripsi, sutradara], (err, rows, field) => {
-        if (err) {
-            return res.status(500).json({ message: 'Ada kesalahan data!', error: err });
-        }
-
-        res.status(201).json({ success: true, message: 'Data berhasil ditambahkan' + data });
-    });
-} else {
-    console.log("1");
-    console.log(req.file.filename)
-    var imgsrc = 'http://localhost:3000/images/' + req.file.filename
-    // buat variable penampung data dan query sql
-        const data = { ...req.body};
-        const judul = data.judul;
-        const rating = data.rating;
-        const deskripsi = data.deskripsi;
-        const sutradara = data.sutradara;
+// Create data / insert data
+app.post('/api/movies', upload.single('foto'), (req, res) => {
+    if (req.file) {
+        const imgsrc = 'http://localhost:5000/images/' + req.file.filename;
+        const { judul, rating, deskripsi, sutradara } = req.body;
         const foto = imgsrc;
         const querysql = 'INSERT INTO movies (judul, rating, deskripsi, sutradara, foto) VALUES (?, ?, ?, ?, ?);';
 
-        // jalankan query
         koneksi.query(querysql, [judul, rating, deskripsi, sutradara, foto], (err, rows, field) => {
             if (err) {
                 return res.status(500).json({ message: 'Ada kesalahan data!', error: err });
             }
-    
-            res.status(201).json({ success: true, message: 'Data berhasil ditambahkan' +data });
+
+            res.status(201).json({ success: true, message: 'Data berhasil ditambahkan', data: req.body });
         });
-}
-}n
-    });
-    console.log("1");
+    } else {
+        const { judul, rating, deskripsi, sutradara } = req.body;
+        const querysql = 'INSERT INTO movies (judul, rating, deskripsi, sutradara) VALUES (?, ?, ?, ?);';
+
+        koneksi.query(querysql, [judul, rating, deskripsi, sutradara], (err, rows, field) => {
+            if (err) {
+                return res.status(500).json({ message: 'Ada kesalahan data!', error: err });
+            }
+
+            res.status(201).json({ success: true, message: 'Data berhasil ditambahkan', data: req.body });
+        });
+    }
 });
 
-// read data / get data
+// Read data / get data
 app.get('/api/movies', (req, res) => {
-    // buat query sql
     const querySql = 'SELECT * FROM movies';
 
-    // jalankan query
     koneksi.query(querySql, (err, rows, field) => {
-        // error handling
         if (err) {
             return res.status(500).json({ message: 'Ada kesalahan', error: err });
         }
 
-        // jika request berhasil
         res.status(200).json({ success: true, data: rows });
     });
 });
 
-
-// read data / get data
+// Read specific data / get specific data
 app.get('/api/movies-specific/:id', (req, res) => {
-    // buat query sql
-    const querySql = 'SELECT judul,rating,deskripsi FROM movies where id=?';
+    const querySql = 'SELECT judul, rating, deskripsi FROM movies WHERE id = ?';
 
-    // jalankan query
-    koneksi.query(querySql,req.params.id, (err, rows, field) => {
-        // error handling
+    koneksi.query(querySql, [req.params.id], (err, rows, field) => {
         if (err) {
             return res.status(500).json({ message: 'Ada kesalahan', error: err });
         }
 
-        // jika request berhasil
         res.status(200).json({ success: true, data: rows });
     });
 });
-// read data / get data
+
+// Filter data by title / get data by title
 app.get('/api/movies/filter/:judul', (req, res) => {
-    // buat query sql
-    const querySql = 'SELECT * FROM movies where judul like '%' + req.params.judul + '%';';
-    console.log(querySql);
-    // jalankan query
-    koneksi.query(querySql, (err, rows, field) => {
-        // error handling
+    const querySql = `SELECT * FROM movies WHERE judul LIKE ?`;
+    const searchValue = `%${req.params.judul}%`;
+
+    koneksi.query(querySql, [searchValue], (err, rows, field) => {
         if (err) {
             return res.status(500).json({ message: 'Ada kesalahan', error: err });
         }
 
-        // jika request berhasil
         res.status(200).json({ success: true, data: rows });
     });
 });
+
 app.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });
