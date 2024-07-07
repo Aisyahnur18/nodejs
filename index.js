@@ -2,11 +2,13 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const koneksi = require('./config/database');
-
 const app = express();
 const port = 5000;
 
-// Middleware
+const cors = require('cors');
+app.use(cors());
+
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -74,6 +76,37 @@ app.get('/api/movies', (req, res) => {
         res.status(200).json({ success: true, data: rows });
     });
 });
+
+// delete data
+app.delete('/api/mahasiswa/:nim', (req, res) => {
+    // buat query sql untuk mencari data dan hapus
+    const querySearch = 'SELECT * FROM movies WHERE id = ?';
+    const queryDelete = 'DELETE FROM movies WHERE id = ?';
+
+    // jalankan query untuk melakukan pencarian data
+    koneksi.query(querySearch, req.params.nim, (err, rows, field) => {
+        // error handling
+        if (err) {
+            return res.status(500).json({ message: 'Ada kesalahan', error: err });
+        }
+
+        // jika id yang dimasukkan sesuai dengan data yang ada di db
+        if (rows.length) {
+            // jalankan query delete
+            koneksi.query(queryDelete, req.params.nim, (err, rows, field) => {
+                // error handling
+                if (err) {
+                    return res.status(500).json({ message: 'Ada kesalahan', error: err });
+                }
+                // jika delete berhasil
+                res.status(200).json({ success: true, message: 'Berhasil hapus data!' });
+            });
+        } else {
+            return res.status(404).json({ message: 'Data tidak ditemukan!', success: false });
+        }
+    });
+});
+
 
 // Read specific data / get specific data
 app.get('/api/movies-specific/:id', (req, res) => {
